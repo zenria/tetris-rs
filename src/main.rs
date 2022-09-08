@@ -1,7 +1,7 @@
 #![feature(duration_consts_float)]
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PresentMode};
 use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_random_piece, Piece};
@@ -15,6 +15,13 @@ fn main() {
     let level = Level::default();
 
     App::new()
+        .insert_resource(WindowDescriptor {
+            title: "Oxidized Tetris".to_string(),
+            width: (BOARD_WIDTH + 3) as f32 * SQ_TOTAL_SIZE,
+            height: (BOARD_HEIGHT + 2) as f32 * SQ_TOTAL_SIZE,
+            present_mode: PresentMode::AutoVsync,
+            ..default()
+        })
         .add_plugins(DefaultPlugins)
         // This plugin maps inputs to an input-type agnostic action-state
         // We need to provide it with an enum which stores the possible actions a player could take

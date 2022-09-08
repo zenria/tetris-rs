@@ -3,10 +3,7 @@ use bevy::{
     sprite::MaterialMesh2dBundle,
 };
 
-use crate::{
-    board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH},
-    piece::Piece,
-};
+use crate::board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 
 #[derive(Component, Clone, Copy)]
 pub struct Square;
@@ -28,7 +25,7 @@ struct SquareBundle {
 }
 
 pub const SQ_TOTAL_SIZE: f32 = SQ_SIZE + SQ_BORDER_WIDTH;
-const BOARD_LEFT_X: f32 = -(BOARD_WIDTH as f32) / 2. * SQ_TOTAL_SIZE;
+const BOARD_LEFT_X: f32 = -((BOARD_WIDTH as f32) + 1.) / 2. * SQ_TOTAL_SIZE;
 const BOARD_BOTTOM_Y: f32 = -(BOARD_HEIGHT as f32) / 2. * SQ_TOTAL_SIZE;
 
 impl SquareBundle {
