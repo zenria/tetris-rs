@@ -8,13 +8,14 @@ use crate::board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 /// Each item on the board is a Square: pieces are composed
 /// with squares, walls and floor are made with squares.
 ///
-/// When a pieces hit the floor or other pieces while moving
-/// down, squares are left on the board (they are not despawned)
+/// When a piece hit the floor or other (immibilized) pieces
+/// while moving down, squares are left on the board (they
+/// are not despawned, only the Piece component is removed)
 ///
 /// Squares are themselves composed with:
 /// - a background Quad
 /// - 4 thin Quads to form borders
-///
+
 #[derive(Component, Clone, Copy)]
 pub struct Square;
 
