@@ -48,7 +48,7 @@ impl SquareBundle {
     }
 }
 
-pub fn spawn_square<T:Component>(
+pub fn spawn_square<T: Component>(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,

@@ -2,11 +2,11 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
+use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_random_piece, Piece};
 use player::{spawn_player, Action, Level, Player};
-use square::{spawn_square, Square, SQ_TOTAL_SIZE};
+use square::{spawn_square, Square, Wall, SQ_TOTAL_SIZE};
 
 const KEY_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.1);
 const FAST_DOWN_DELAY: Duration = Duration::from_secs_f64(0.03);
@@ -27,6 +27,7 @@ fn main() {
         .add_system(move_down_faster)
         .add_system(stop_fast_move_down_on_collision)
         .add_system(move_horizontally)
+        .add_system(detect_complete_lines)
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
         })
@@ -61,7 +62,7 @@ fn setup(
             BoardPosition::new(i, 0),
             Color::BLACK,
             Square,
-            None,
+            Some(Wall),
         );
     }
     for i in 1..=BOARD_HEIGHT {
@@ -72,7 +73,7 @@ fn setup(
             BoardPosition::new(0, i),
             Color::BLACK,
             Square,
-            None,
+            Some(Wall),
         );
         spawn_square(
             &mut commands,
@@ -81,7 +82,7 @@ fn setup(
             BoardPosition::new(BOARD_WIDTH + 1, i),
             Color::BLACK,
             Square,
-            None,
+            Some(Wall),
         );
     }
 
@@ -233,5 +234,43 @@ fn stop_fast_move_down_on_collision(
 ) {
     for _ev in event_reader.iter() {
         timer.timer.set_duration(level.get_down_duration())
+    }
+}
+
+fn detect_complete_lines(
+    mut commands: Commands,
+    mut event_reader: EventReader<PieceHasStoppedEvent>,
+    mut fixed_query: Query<
+        (Entity, &Square, &mut BoardPosition, &mut Transform),
+        (Without<Piece>, Without<Wall>),
+    >,
+) {
+    for _ev in event_reader.iter() {
+        let board = fixed_query
+            .iter()
+            .map(|(_, _, bp, _)| *bp)
+            .collect::<Board>();
+
+        let full_lines = (1..=BOARD_HEIGHT)
+            .into_iter()
+            .filter(|line| board.is_line_full(*line))
+            .collect::<Vec<_>>();
+
+        //println!("BOARD:\n{}", board);
+        //println!("Full lines: {:?}", full_lines);
+
+        for (entity, _, mut bp, mut tr) in &mut fixed_query {
+            if full_lines.contains(&bp.y) {
+                //remove squares from completed lines!
+                commands.entity(entity).despawn_recursive();
+            } else {
+                // how many lines have been completed below the current
+                // position?
+                let completed_below = full_lines.iter().filter(|line| **line < bp.y).count() as i32;
+                // move down!!!
+                bp.y -= completed_below;
+                tr.translation.y -= completed_below as f32 * SQ_TOTAL_SIZE;
+            }
+        }
     }
 }
