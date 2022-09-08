@@ -5,7 +5,10 @@ use bevy::prelude::Component;
 pub const BOARD_WIDTH: i32 = 10;
 pub const BOARD_HEIGHT: i32 = 25;
 
-///Position in the Board
+/// Position in the Board
+///
+/// Each square that are composing pieces have a BoardPosition
+/// component to ease computing
 #[derive(Component, Clone, Copy)]
 pub struct BoardPosition {
     pub x: i32,
@@ -27,7 +30,7 @@ impl BoardPosition {
     }
 }
 
-/// Helper struct to that detects complete lines
+/// Helper struct  that detects complete lines
 pub struct Board {
     inner: [bool; BOARD_WIDTH as usize * BOARD_HEIGHT as usize],
 }
@@ -39,6 +42,20 @@ impl Board {
         let start_pos = BoardPosition::new(1, line);
         let end_post = BoardPosition::new(BOARD_WIDTH, line);
         self.inner[start_pos.into_idx()..=end_post.into_idx()] == FULL_LINE
+    }
+}
+
+impl FromIterator<BoardPosition> for Board {
+    fn from_iter<T: IntoIterator<Item = BoardPosition>>(iter: T) -> Self {
+        let mut ret = Board {
+            inner: [false; BOARD_WIDTH as usize * BOARD_HEIGHT as usize],
+        };
+        for bp in iter {
+            if bp.x > 0 && bp.y > 0 && bp.x <= BOARD_WIDTH {
+                ret.inner[bp.into_idx()] = true;
+            }
+        }
+        ret
     }
 }
 
@@ -56,19 +73,5 @@ impl Display for Board {
             f.write_str("\n")?;
         }
         Ok(())
-    }
-}
-
-impl FromIterator<BoardPosition> for Board {
-    fn from_iter<T: IntoIterator<Item = BoardPosition>>(iter: T) -> Self {
-        let mut ret = Board {
-            inner: [false; BOARD_WIDTH as usize * BOARD_HEIGHT as usize],
-        };
-        for bp in iter {
-            if bp.x > 0 && bp.y > 0 && bp.x <= BOARD_WIDTH {
-                ret.inner[bp.into_idx()] = true;
-            }
-        }
-        ret
     }
 }

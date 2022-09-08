@@ -49,6 +49,7 @@ enum Orientation {
     Right,
 }
 
+/// The actuel piece that goes down and can be moved/rotated
 #[derive(Component)]
 pub struct Piece {
     pub piece_type: PieceType,

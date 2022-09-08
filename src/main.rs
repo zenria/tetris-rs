@@ -38,7 +38,7 @@ fn main() {
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
         })
-        .insert_resource(MoveHoritontallyTimer {
+        .insert_resource(MoveHorizontallyTimer {
             timer: Timer::new(KEY_REPEAT_DELAY, true),
         })
         .insert_resource(level)
@@ -97,10 +97,13 @@ fn setup(
     spawn_random_piece(&mut commands, &mut meshes, &mut materials);
 }
 
+/// The timer used to mode down pieces
 struct MoveDownTimer {
     timer: Timer,
 }
-struct MoveHoritontallyTimer {
+/// The timer to move right/left piece while the left or
+/// right key is pressed
+struct MoveHorizontallyTimer {
     timer: Timer,
 }
 
@@ -169,7 +172,7 @@ fn move_horizontally(
     query: Query<&ActionState<Action>, With<Player>>,
     fixed_query: Query<(&Square, &mut BoardPosition), Without<Piece>>,
     mut moving_query: Query<(Entity, &Square, &mut BoardPosition, &mut Transform), With<Piece>>,
-    mut timer: ResMut<MoveHoritontallyTimer>,
+    mut timer: ResMut<MoveHorizontallyTimer>,
     time: Res<Time>,
 ) {
     timer.timer.tick(time.delta());
@@ -188,6 +191,7 @@ fn move_horizontally(
     match direction {
         Some(_) => timer.timer.reset(),
         None => {
+            // is the key still pressed?
             if timer.timer.just_finished() {
                 // recompute direction if keys are still pressed
                 if action_state.pressed(Action::Left) {
