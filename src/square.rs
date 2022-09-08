@@ -15,6 +15,10 @@ pub const SQ_SIZE: f32 = 20.;
 
 pub const SQ_BORDER_WIDTH: f32 = 2.;
 
+/// Marker component: walls&floor
+#[derive(Component)]
+pub struct Wall;
+
 #[derive(Bundle)]
 struct SquareBundle {
     square: Square,
@@ -44,14 +48,14 @@ impl SquareBundle {
     }
 }
 
-pub fn spawn_square(
+pub fn spawn_square<T:Component>(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
     board_position: BoardPosition,
     color: Color,
     square: Square,
-    piece: Option<Piece>,
+    adjacent_componnmt: Option<T>,
 ) -> Entity {
     let mut entity =
         commands.spawn_bundle(SquareBundle::from_board_position(square, board_position));
@@ -151,8 +155,8 @@ pub fn spawn_square(
             ..default()
         });
     });
-    if let Some(piece) = piece {
-        entity.insert(piece);
+    if let Some(c) = adjacent_componnmt {
+        entity.insert(c);
     }
     entity.id()
 }
