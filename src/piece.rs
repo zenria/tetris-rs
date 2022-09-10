@@ -62,7 +62,8 @@ impl Distribution<PieceType> for Standard {
     }
 }
 
-enum Orientation {
+#[derive(Clone, Copy)]
+pub enum Orientation {
     Up,
     Left,
     Bottom,
@@ -73,6 +74,7 @@ enum Orientation {
 #[derive(Component, Clone, Copy)]
 pub struct Piece {
     pub piece_type: PieceType,
+    pub orientation: Orientation,
 }
 
 pub fn spawn_random_piece(
@@ -82,6 +84,7 @@ pub fn spawn_random_piece(
 ) {
     let piece = Piece {
         piece_type: rand::random(),
+        orientation: Orientation::Up,
     };
     for (bp_x, bp_y) in piece.piece_type.initial_square_pos() {
         spawn_square(
