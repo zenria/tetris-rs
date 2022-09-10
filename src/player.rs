@@ -23,6 +23,8 @@ pub enum Action {
     Left,
     Right,
     Down,
+    RotateClock,
+    RotateAnti,
 }
 #[derive(Component)]
 pub struct Player;
@@ -37,8 +39,6 @@ struct PlayerBundle {
 }
 impl PlayerBundle {
     fn default_input_map() -> InputMap<Action> {
-        // This allows us to replace `ArpgAction::Up` with `Up`,
-        // significantly reducing boilerplate
         use Action::*;
         let mut input_map = InputMap::default();
 
@@ -52,6 +52,12 @@ impl PlayerBundle {
 
         input_map.insert(KeyCode::Right, Right);
         input_map.insert(GamepadButtonType::DPadRight, Right);
+
+        input_map.insert(KeyCode::Up, RotateClock);
+        input_map.insert(GamepadButtonType::Z, Right);
+
+        input_map.insert(KeyCode::RShift, RotateAnti);
+        input_map.insert(GamepadButtonType::C, Right);
 
         input_map
     }

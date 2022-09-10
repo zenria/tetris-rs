@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use bevy::prelude::*;
 use rand::{
     distributions::{Distribution, Standard},
@@ -9,7 +11,7 @@ use crate::{
     square::{spawn_square, Square},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum PieceType {
     Square,
     T,
@@ -18,6 +20,16 @@ pub enum PieceType {
     Bar,
     S,
     InvS,
+}
+
+type PiecePositions = [(i32, i32); 4];
+
+impl Add<BoardPosition> for PiecePositions {
+    type Output = Self;
+
+    fn add(self, rhs: BoardPosition) -> Self::Output {
+        [self[0] + rhs, self[1] + rhs, self[2] + rhs, self[3] + rhs]
+    }
 }
 
 impl PieceType {
@@ -33,15 +45,54 @@ impl PieceType {
         }
     }
 
-    fn initial_square_pos(&self) -> [(i32, i32); 4] {
+    pub fn anchor(&self) -> BoardPosition {
+        match self {
+            PieceType::Square => BoardPosition::new(0, 0),
+            PieceType::T => BoardPosition::new(-1, 0),
+            PieceType::L => BoardPosition::new(-1, 0),
+            PieceType::InvL => BoardPosition::new(-1, 0),
+            PieceType::Bar => BoardPosition::new(0, 0),
+            PieceType::S => BoardPosition::new(0, 0),
+            PieceType::InvS => BoardPosition::new(0, 0),
+        }
+    }
+
+    pub fn square_pos(&self, orientation: Orientation) -> PiecePositions {
         match self {
             PieceType::Square => [(0, 0), (1, 0), (0, -1), (1, -1)],
-            PieceType::T => [(0, 0), (-1, -1), (0, -1), (1, -1)],
-            PieceType::L => [(-1, 0), (0, 0), (1, 0), (1, -1)],
-            PieceType::InvL => [(-1, 0), (0, 0), (1, 0), (-1, -1)],
-            PieceType::Bar => [(-1, 0), (0, 0), (1, 0), (2, 0)],
-            PieceType::S => [(-1, 0), (0, 0), (0, -1), (1, -1)],
-            PieceType::InvS => [(0, 0), (1, 0), (-1, -1), (0, -1)],
+            PieceType::T => match orientation {
+                Orientation::Up => [(1, 0), (0, -1), (1, -1), (2, -1)],
+                Orientation::Left => [(0, -1), (1, 0), (1, -1), (1, -2)],
+                Orientation::Bottom => [(0, -1), (1, -1), (2, -1), (1, -2)],
+                Orientation::Right => [(1, 0), (1, -1), (1, -2), (2, -1)],
+            },
+            PieceType::L => match orientation {
+                Orientation::Up => [(0, 0), (1, 0), (2, 0), (2, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, -2), (1, 0)],
+                Orientation::Bottom => [(0, 0), (0, -1), (1, -1), (2, -1)],
+                Orientation::Right => [(1, 0), (1, -1), (1, -2), (0, -2)],
+            },
+
+            PieceType::InvL => match orientation {
+                Orientation::Up => [(0, 0), (1, 0), (2, 0), (0, -1)],
+                Orientation::Left => [(0, 0), (0, -1), (0, -2), (1, -2)],
+                Orientation::Bottom => [(2, 0), (0, -1), (1, -1), (2, -1)],
+                Orientation::Right => [(0, 0), (1, 0), (1, -1), (1, -2)],
+            },
+            PieceType::Bar => match orientation {
+                // horizontal
+                Orientation::Up | Orientation::Bottom => [(-1, 0), (0, 0), (1, 0), (2, 0)],
+                // vertical
+                Orientation::Left | Orientation::Right => [(1, 0), (1, 1), (1, 2), (1, 3)],
+            },
+            PieceType::S => match orientation {
+                Orientation::Up | Orientation::Bottom => [(1, 0), (2, 0), (0, -1), (1, -1)],
+                Orientation::Left | Orientation::Right => [(0, 0), (0, -1), (1, -1), (1, -2)],
+            },
+            PieceType::InvS => match orientation {
+                Orientation::Up | Orientation::Bottom => [(0, 0), (1, 0), (1, -1), (2, -1)],
+                Orientation::Left | Orientation::Right => [(0, -1), (0, -2), (1, 0), (1, -1)],
+            },
         }
     }
 }
@@ -62,7 +113,7 @@ impl Distribution<PieceType> for Standard {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Orientation {
     Up,
     Left,
@@ -70,11 +121,51 @@ pub enum Orientation {
     Right,
 }
 
-/// The actuel piece that goes down and can be moved/rotated
+impl Orientation {
+    pub fn apply_rotation(&self, rotation: Rotation) -> Orientation {
+        match self {
+            Orientation::Up => match rotation {
+                Rotation::Clock => Orientation::Right,
+                Rotation::Anti => Orientation::Left,
+            },
+            Orientation::Left => match rotation {
+                Rotation::Clock => Orientation::Up,
+                Rotation::Anti => Orientation::Bottom,
+            },
+            Orientation::Bottom => match rotation {
+                Rotation::Clock => Orientation::Left,
+                Rotation::Anti => Orientation::Right,
+            },
+            Orientation::Right => match rotation {
+                Rotation::Clock => Orientation::Bottom,
+                Rotation::Anti => Orientation::Up,
+            },
+        }
+    }
+}
+
+/// Marker components for squares that belong to the current moving piece
 #[derive(Component, Clone, Copy)]
+pub struct PieceSquare;
+
+/// The actual moving piece that goes down and can be moved/rotated
+#[derive(Component, Debug)]
 pub struct Piece {
     pub piece_type: PieceType,
     pub orientation: Orientation,
+    /// helper position to ease rotation computation
+    pub position: BoardPosition,
+}
+
+pub enum Rotation {
+    Clock,
+    Anti,
+}
+
+impl Piece {
+    fn square_pos(&self) -> PiecePositions {
+        self.piece_type.square_pos(self.orientation) + self.piece_type.anchor()
+    }
 }
 
 pub fn spawn_random_piece(
@@ -85,16 +176,20 @@ pub fn spawn_random_piece(
     let piece = Piece {
         piece_type: rand::random(),
         orientation: Orientation::Up,
+        position: BoardPosition::new(BOARD_WIDTH / 2, BOARD_HEIGHT),
     };
-    for (bp_x, bp_y) in piece.piece_type.initial_square_pos() {
+    // spawn the squares
+    for square_pos in piece.square_pos() {
         spawn_square(
             commands,
             meshes,
             materials,
-            BoardPosition::new(BOARD_WIDTH / 2 + bp_x, BOARD_HEIGHT + bp_y),
+            piece.position + square_pos,
             piece.piece_type.color(),
             Square,
-            Some(piece),
+            Some(PieceSquare),
         );
     }
+    // spawn the actual piece
+    commands.spawn().insert(piece);
 }

@@ -39,16 +39,22 @@ pub const SQ_TOTAL_SIZE: f32 = SQ_SIZE + SQ_BORDER_WIDTH;
 const BOARD_LEFT_X: f32 = -((BOARD_WIDTH as f32) + 1.) / 2. * SQ_TOTAL_SIZE;
 const BOARD_BOTTOM_Y: f32 = -(BOARD_HEIGHT as f32) / 2. * SQ_TOTAL_SIZE;
 
+impl BoardPosition {
+    pub fn to_real_position(&self) -> Transform {
+        Transform::from_translation(Vec3::new(
+            BOARD_LEFT_X + SQ_TOTAL_SIZE * (self.x as f32),
+            BOARD_BOTTOM_Y + SQ_TOTAL_SIZE * (self.y as f32),
+            0.,
+        ))
+    }
+}
+
 impl SquareBundle {
     fn from_board_position(square: Square, board_position: BoardPosition) -> Self {
         Self {
             square,
             spatial_bundle: SpatialBundle {
-                transform: Transform::from_translation(Vec3::new(
-                    BOARD_LEFT_X + SQ_TOTAL_SIZE * (board_position.x as f32),
-                    BOARD_BOTTOM_Y + SQ_TOTAL_SIZE * (board_position.y as f32),
-                    0.,
-                )),
+                transform: board_position.to_real_position(),
                 ..Default::default()
             },
             board_position,

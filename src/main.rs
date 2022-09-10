@@ -4,10 +4,11 @@ use std::time::Duration;
 use bevy::{prelude::*, window::PresentMode};
 use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
-use piece::{spawn_random_piece, Piece};
+use piece::{spawn_random_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Level, Player};
 use square::{spawn_square, Square, Wall, SQ_TOTAL_SIZE};
 
+const FIRST_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.25);
 const KEY_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.1);
 const FAST_DOWN_DELAY: Duration = Duration::from_secs_f64(0.03);
 
@@ -35,11 +36,12 @@ fn main() {
         .add_system(stop_fast_move_down_on_collision)
         .add_system(move_horizontally)
         .add_system(detect_complete_lines)
+        .add_system(rotate)
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
         })
         .insert_resource(MoveHorizontallyTimer {
-            timer: Timer::new(KEY_REPEAT_DELAY, true),
+            timer: Timer::new(FIRST_REPEAT_DELAY, true),
         })
         .insert_resource(level)
         .run();
@@ -112,8 +114,12 @@ fn move_down(
     time: Res<Time>,
     mut timer: ResMut<MoveDownTimer>,
     mut piece_has_stopped_event_writer: EventWriter<PieceHasStoppedEvent>,
-    fixed_query: Query<(&Square, &mut BoardPosition), Without<Piece>>,
-    mut moving_query: Query<(Entity, &Square, &mut BoardPosition, &mut Transform), With<Piece>>,
+    fixed_query: Query<(&Square, &mut BoardPosition), Without<PieceSquare>>,
+    mut moving_query: Query<
+        (Entity, &Square, &mut BoardPosition, &mut Transform),
+        With<PieceSquare>,
+    >,
+    mut piece: Query<(Entity, &mut Piece)>,
 ) {
     timer.timer.tick(time.delta());
     if !timer.timer.finished() {
@@ -139,8 +145,11 @@ fn move_down(
         // count score
         for (entity, _, _, _) in moving_query.iter_mut() {
             // transform the Piece into fixed squares
-            commands.entity(entity).remove::<Piece>();
+            commands.entity(entity).remove::<PieceSquare>();
         }
+        // despawn the current piece
+        commands.entity(piece.single().0).despawn();
+
         if !game_over {
             // no need to spawn something new on game over
             piece_has_stopped_event_writer.send_default();
@@ -149,6 +158,9 @@ fn move_down(
         for (_, _, mut bp, mut tr) in moving_query.iter_mut() {
             bp.y -= 1;
             tr.translation.y -= SQ_TOTAL_SIZE;
+        }
+        for (_, mut piece) in &mut piece {
+            piece.position.y -= 1;
         }
     }
 }
@@ -168,12 +180,62 @@ fn spawn_new_on_stopped(
     }
 }
 
+fn rotate(
+    input_query: Query<&ActionState<Action>, With<Player>>,
+    mut moving_query: Query<(&Square, &mut BoardPosition, &mut Transform), With<PieceSquare>>,
+    fixed_query: Query<(&Square, &BoardPosition), Without<PieceSquare>>,
+    mut piece: Query<&mut Piece>,
+) {
+    if let Ok(mut piece) = piece.get_single_mut() {
+        let action = input_query.single();
+        let rotation = if action.just_pressed(Action::RotateAnti) {
+            Some(Rotation::Anti)
+        } else if action.just_pressed(Action::RotateClock) {
+            Some(Rotation::Clock)
+        } else {
+            None
+        };
+        if let Some(rotation) = rotation {
+            // gogogo let's go
+            let new_orientation = piece.orientation.apply_rotation(rotation);
+            // check if the new orientation collides with something concrete
+            let new_positions = piece.piece_type.square_pos(new_orientation)
+                + piece.piece_type.anchor()
+                + piece.position;
+
+            let board = fixed_query.iter().map(|(_, bp)| *bp).collect::<Board>();
+            for pos in new_positions {
+                if board.is_concrete(pos) {
+                    // cannot rotate
+                    return;
+                }
+            }
+            // nothing is in the rotation way! let's change the position of all squares
+            let mut moving_square = moving_query.iter_mut();
+            for pos in new_positions {
+                // by construction there are exactly 4 moving square, so we can safely
+                // unwrap at each iteration
+                let (_, mut bp, mut tr) = moving_square.next().unwrap();
+                *bp = pos.into();
+                *tr = bp.as_ref().to_real_position();
+            }
+            piece.orientation = new_orientation;
+
+            println!("New orientaation: {:?}", piece);
+        }
+    }
+}
+
 fn move_horizontally(
     query: Query<&ActionState<Action>, With<Player>>,
-    fixed_query: Query<(&Square, &mut BoardPosition), Without<Piece>>,
-    mut moving_query: Query<(Entity, &Square, &mut BoardPosition, &mut Transform), With<Piece>>,
+    fixed_query: Query<(&Square, &mut BoardPosition), Without<PieceSquare>>,
+    mut moving_query: Query<
+        (Entity, &Square, &mut BoardPosition, &mut Transform),
+        With<PieceSquare>,
+    >,
     mut timer: ResMut<MoveHorizontallyTimer>,
     time: Res<Time>,
+    mut piece: Query<&mut Piece>,
 ) {
     timer.timer.tick(time.delta());
 
@@ -189,10 +251,19 @@ fn move_horizontally(
     };
 
     match direction {
-        Some(_) => timer.timer.reset(),
+        Some(_) => {
+            // left or right ; just pressed
+            timer.timer.set_duration(FIRST_REPEAT_DELAY);
+            timer.timer.reset();
+        }
         None => {
             // is the key still pressed?
             if timer.timer.just_finished() {
+                if timer.timer.duration() == FIRST_REPEAT_DELAY {
+                    // adjust timer duration after first delay
+                    timer.timer.set_duration(KEY_REPEAT_DELAY);
+                    timer.timer.reset();
+                }
                 // recompute direction if keys are still pressed
                 if action_state.pressed(Action::Left) {
                     direction = Some(-1);
@@ -218,6 +289,10 @@ fn move_horizontally(
             for (_, _, mut bp, mut tr) in moving_query.iter_mut() {
                 bp.x += direction;
                 tr.translation.x += SQ_TOTAL_SIZE * direction as f32;
+            }
+            // there is 0 (gane over) or 1 (running) piece on the board...
+            for mut piece in &mut piece {
+                piece.position.x += direction;
             }
         }
     }
@@ -253,7 +328,7 @@ fn detect_complete_lines(
     mut event_reader: EventReader<PieceHasStoppedEvent>,
     mut fixed_query: Query<
         (Entity, &Square, &mut BoardPosition, &mut Transform),
-        (Without<Piece>, Without<Wall>),
+        (Without<PieceSquare>, Without<Wall>),
     >,
 ) {
     for _ev in event_reader.iter() {
