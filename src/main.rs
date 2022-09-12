@@ -35,7 +35,12 @@ fn main() {
         .add_system(move_down_faster)
         .add_system(stop_fast_move_down_on_collision)
         .add_system(move_horizontally)
-        .add_system(detect_complete_lines)
+        // detect complete line must be executed before move_down
+        // because move down can remove a component that is used within a condition
+        // for line detection. if the detection happens after a collision has been
+        // detected and the PieceSquare has been removed, the line detection system will
+        // not see the removal of the component
+        .add_system(detect_complete_lines.before(move_down))
         .add_system(rotate)
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
@@ -122,7 +127,7 @@ fn move_down(
     mut piece: Query<(Entity, &mut Piece)>,
 ) {
     timer.timer.tick(time.delta());
-    if !timer.timer.finished() {
+    if !timer.timer.just_finished() {
         return;
     }
     // check for collisions
@@ -343,7 +348,7 @@ fn detect_complete_lines(
             .collect::<Vec<_>>();
 
         //println!("BOARD:\n{}", board);
-        //println!("Full lines: {:?}", full_lines);
+        println!("Full lines: {:?}", full_lines);
 
         for (entity, _, mut bp, mut tr) in &mut fixed_query {
             if full_lines.contains(&bp.y) {
