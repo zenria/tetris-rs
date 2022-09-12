@@ -174,7 +174,7 @@ pub fn spawn_random_piece(
     materials: &mut ResMut<Assets<ColorMaterial>>,
 ) {
     let piece = Piece {
-        piece_type: rand::random(),
+        piece_type: PieceType::Bar, //rand::random(),
         orientation: Orientation::Up,
         position: BoardPosition::new(BOARD_WIDTH / 2, BOARD_HEIGHT),
     };
