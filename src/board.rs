@@ -90,7 +90,7 @@ impl Board {
     /// is in a wall or in a fixed square?
     pub fn is_concrete<BP: Into<BoardPosition>>(&self, bp: BP) -> bool {
         let bp: BoardPosition = bp.into();
-        if bp.x == 0 || bp.x == BOARD_WIDTH + 1 || bp.y == 0 {
+        if bp.x <= 0 || bp.x == BOARD_WIDTH + 1 || bp.y <= 0 {
             // wall
             true
         } else if bp.y > BOARD_HEIGHT {
