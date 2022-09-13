@@ -25,6 +25,7 @@ pub enum Action {
     Down,
     RotateClock,
     RotateAnti,
+    Pause,
 }
 #[derive(Component)]
 pub struct Player;
@@ -54,10 +55,13 @@ impl PlayerBundle {
         input_map.insert(GamepadButtonType::DPadRight, Right);
 
         input_map.insert(KeyCode::Up, RotateClock);
-        input_map.insert(GamepadButtonType::Z, Right);
+        input_map.insert(GamepadButtonType::Z, RotateClock);
 
         input_map.insert(KeyCode::RShift, RotateAnti);
-        input_map.insert(GamepadButtonType::C, Right);
+        input_map.insert(GamepadButtonType::C, RotateAnti);
+
+        input_map.insert(KeyCode::P, Pause);
+        input_map.insert(GamepadButtonType::Start, Pause);
 
         input_map
     }

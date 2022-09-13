@@ -12,8 +12,18 @@ const FIRST_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.25);
 const KEY_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.1);
 const FAST_DOWN_DELAY: Duration = Duration::from_secs_f64(0.03);
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum GameState {
+    GameOver,
+    InGame,
+    Pause,
+}
+
 #[derive(Default)]
 pub struct SpawnPieceEvent;
+
+const WINDOW_WIDTH: f32 = (BOARD_WIDTH + 12) as f32 * SQ_TOTAL_SIZE;
+const WINDOW_HEIGHT: f32 = (BOARD_HEIGHT + 2) as f32 * SQ_TOTAL_SIZE;
 
 fn main() {
     let level = Level::default();
@@ -21,8 +31,8 @@ fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Oxidized Tetris".to_string(),
-            width: (BOARD_WIDTH + 12) as f32 * SQ_TOTAL_SIZE,
-            height: (BOARD_HEIGHT + 2) as f32 * SQ_TOTAL_SIZE,
+            width: WINDOW_WIDTH,
+            height: WINDOW_HEIGHT,
             present_mode: PresentMode::AutoVsync,
             ..default()
         })
@@ -30,23 +40,31 @@ fn main() {
         // This plugin maps inputs to an input-type agnostic action-state
         // We need to provide it with an enum which stores the possible actions a player could take
         .add_plugin(InputManagerPlugin::<Action>::default())
+        .add_state(GameState::InGame)
         .add_startup_system(setup)
         .add_event::<PieceHasStoppedEvent>()
         .add_event::<SpawnPieceEvent>()
         .add_system(bevy::window::close_on_esc)
-        .add_system(move_down)
-        .add_system(spawn_new_on_stopped)
-        .add_system(move_down_faster)
-        .add_system(stop_fast_move_down_on_collision)
-        .add_system(move_horizontally)
-        // detect complete line must be executed before move_down
-        // because move down can remove a component that is used within a condition
-        // for line detection. if the detection happens after a collision has been
-        // detected and the PieceSquare has been removed, the line detection system will
-        // not see the removal of the component until next tick
-        .add_system(detect_complete_lines.before(move_down))
-        .add_system(spawn_next_piece)
-        .add_system(rotate)
+        .add_system(pause::pause)
+        .add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(game_over::game_over))
+        .add_system_set(
+            SystemSet::on_update(GameState::InGame)
+                .with_system(move_down)
+                .with_system(move_horizontally)
+                // detect complete line must be executed before move_down
+                // because move down can remove a component that is used within a condition
+                // for line detection. if the detection happens after a collision has been
+                // detected and the PieceSquare has been removed, the line detection system will
+                // not see the removal of the component until next tick
+                .with_system(detect_complete_lines.before(move_down))
+                .with_system(spawn_new_on_stopped)
+                .with_system(spawn_next_piece)
+                .with_system(move_down_faster)
+                .with_system(rotate)
+                .with_system(stop_fast_move_down_on_collision),
+        )
+        .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
+        .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
         })
@@ -58,6 +76,8 @@ fn main() {
 }
 
 mod board;
+mod game_over;
+mod pause;
 mod piece;
 mod player;
 mod square;
@@ -174,6 +194,7 @@ fn move_down(
         With<PieceSquare>,
     >,
     mut piece: Query<(Entity, &mut Piece)>,
+    mut state: ResMut<State<GameState>>,
 ) {
     timer.timer.tick(time.delta());
     if !timer.timer.just_finished() {
@@ -207,6 +228,9 @@ fn move_down(
         if !game_over {
             // no need to spawn something new on game over
             piece_has_stopped_event_writer.send_default();
+        } else {
+            // game over
+            let _ = state.set(GameState::GameOver);
         }
     } else {
         for (_, _, mut bp, mut tr) in moving_query.iter_mut() {
@@ -224,9 +248,6 @@ fn move_down(
 struct PieceHasStoppedEvent;
 
 fn spawn_new_on_stopped(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
     mut event_reader: EventReader<PieceHasStoppedEvent>,
     mut spawn_piece_writer: EventWriter<SpawnPieceEvent>,
 ) {
