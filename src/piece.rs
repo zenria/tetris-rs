@@ -9,6 +9,7 @@ use rand::{
 use crate::{
     board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH},
     square::{spawn_square, Square},
+    SpawnPieceEvent,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -148,6 +149,10 @@ impl Orientation {
 #[derive(Component, Clone, Copy)]
 pub struct PieceSquare;
 
+/// Marker components for squares that belong to the current moving piece
+#[derive(Component, Clone, Copy)]
+pub struct NextPieceSquare(PieceType);
+
 /// The actual moving piece that goes down and can be moved/rotated
 #[derive(Component, Debug)]
 pub struct Piece {
@@ -168,7 +173,7 @@ impl Piece {
     }
 }
 
-pub fn spawn_random_piece(
+fn spawn_next_random_piece(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
@@ -176,7 +181,7 @@ pub fn spawn_random_piece(
     let piece = Piece {
         piece_type: rand::random(),
         orientation: Orientation::Up,
-        position: BoardPosition::new(BOARD_WIDTH / 2, BOARD_HEIGHT),
+        position: BoardPosition::new(BOARD_WIDTH + 5, 3),
     };
     // spawn the squares
     for square_pos in piece.square_pos() {
@@ -187,9 +192,52 @@ pub fn spawn_random_piece(
             piece.position + square_pos,
             piece.piece_type.color(),
             Square,
-            Some(PieceSquare),
+            Some(NextPieceSquare(piece.piece_type)),
         );
     }
     // spawn the actual piece
-    commands.spawn().insert(piece);
+    //commands.spawn().insert(piece);
+}
+
+pub fn spawn_next_piece(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    next_query: Query<(Entity, &NextPieceSquare)>,
+    mut event_reader: EventReader<SpawnPieceEvent>,
+) {
+    for _ev in event_reader.iter() {
+        let piece_type = next_query
+            .iter()
+            .map(|(_, piece)| piece.0)
+            .nth(0)
+            .unwrap_or_else(|| rand::random());
+
+        let piece = Piece {
+            piece_type,
+            orientation: Orientation::Up,
+            position: BoardPosition::new(BOARD_WIDTH / 2, BOARD_HEIGHT),
+        };
+        // spawn the squares
+        for square_pos in piece.square_pos() {
+            spawn_square(
+                &mut commands,
+                &mut meshes,
+                &mut materials,
+                piece.position + square_pos,
+                piece.piece_type.color(),
+                Square,
+                Some(PieceSquare),
+            );
+        }
+        // spawn the actual piece
+        commands.spawn().insert(piece);
+
+        for (entity, _) in &next_query {
+            commands.entity(entity).despawn_recursive();
+        }
+
+        // spawn the next piece
+        spawn_next_random_piece(&mut commands, &mut meshes, &mut materials)
+    }
 }

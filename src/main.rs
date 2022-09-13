@@ -4,7 +4,7 @@ use std::time::Duration;
 use bevy::{prelude::*, window::PresentMode};
 use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
-use piece::{spawn_random_piece, Piece, PieceSquare, Rotation};
+use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Level, Player};
 use square::{spawn_square, Square, Wall, SQ_TOTAL_SIZE};
 
@@ -12,13 +12,16 @@ const FIRST_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.25);
 const KEY_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.1);
 const FAST_DOWN_DELAY: Duration = Duration::from_secs_f64(0.03);
 
+#[derive(Default)]
+pub struct SpawnPieceEvent;
+
 fn main() {
     let level = Level::default();
 
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Oxidized Tetris".to_string(),
-            width: (BOARD_WIDTH + 3) as f32 * SQ_TOTAL_SIZE,
+            width: (BOARD_WIDTH + 12) as f32 * SQ_TOTAL_SIZE,
             height: (BOARD_HEIGHT + 2) as f32 * SQ_TOTAL_SIZE,
             present_mode: PresentMode::AutoVsync,
             ..default()
@@ -29,6 +32,7 @@ fn main() {
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_startup_system(setup)
         .add_event::<PieceHasStoppedEvent>()
+        .add_event::<SpawnPieceEvent>()
         .add_system(bevy::window::close_on_esc)
         .add_system(move_down)
         .add_system(spawn_new_on_stopped)
@@ -41,6 +45,7 @@ fn main() {
         // detected and the PieceSquare has been removed, the line detection system will
         // not see the removal of the component until next tick
         .add_system(detect_complete_lines.before(move_down))
+        .add_system(spawn_next_piece)
         .add_system(rotate)
         .insert_resource(MoveDownTimer {
             timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
@@ -61,6 +66,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut spwan_piece_event_writer: EventWriter<SpawnPieceEvent>,
 ) {
     commands.spawn_bundle(Camera2dBundle::default());
 
@@ -100,8 +106,51 @@ fn setup(
         );
     }
 
+    // setup next piece walls
+
+    for i in 0..6 {
+        spawn_square(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            BoardPosition::new(BOARD_WIDTH + 3 + i, 0),
+            Color::BLACK,
+            Square,
+            Some(Wall),
+        );
+        spawn_square(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            BoardPosition::new(BOARD_WIDTH + 3 + i, 5),
+            Color::BLACK,
+            Square,
+            Some(Wall),
+        );
+    }
+    for i in 0..4 {
+        spawn_square(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            BoardPosition::new(BOARD_WIDTH + 3, 1 + i),
+            Color::BLACK,
+            Square,
+            Some(Wall),
+        );
+        spawn_square(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            BoardPosition::new(BOARD_WIDTH + 3 + 5, 1 + i),
+            Color::BLACK,
+            Square,
+            Some(Wall),
+        );
+    }
+
     // spawn the first piece
-    spawn_random_piece(&mut commands, &mut meshes, &mut materials);
+    spwan_piece_event_writer.send_default();
 }
 
 /// The timer used to mode down pieces
@@ -179,9 +228,10 @@ fn spawn_new_on_stopped(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut event_reader: EventReader<PieceHasStoppedEvent>,
+    mut spawn_piece_writer: EventWriter<SpawnPieceEvent>,
 ) {
     for _ev in event_reader.iter() {
-        spawn_random_piece(&mut commands, &mut meshes, &mut materials)
+        spawn_piece_writer.send_default();
     }
 }
 
