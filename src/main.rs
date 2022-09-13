@@ -39,7 +39,7 @@ fn main() {
         // because move down can remove a component that is used within a condition
         // for line detection. if the detection happens after a collision has been
         // detected and the PieceSquare has been removed, the line detection system will
-        // not see the removal of the component
+        // not see the removal of the component until next tick
         .add_system(detect_complete_lines.before(move_down))
         .add_system(rotate)
         .insert_resource(MoveDownTimer {
