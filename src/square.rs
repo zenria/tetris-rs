@@ -1,9 +1,12 @@
 use bevy::{
     prelude::{shape::Quad, *},
-    sprite::MaterialMesh2dBundle,
+    sprite::{Material2d, MaterialMesh2dBundle},
 };
 
-use crate::board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
+use crate::{
+    board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH},
+    GameState, SpawnPieceEvent,
+};
 
 /// Each item on the board is a Square: pieces are composed
 /// with squares, walls and floor are made with squares.
@@ -174,3 +177,49 @@ pub fn spawn_square<T: Component>(
     }
     entity.id()
 }
+
+#[derive(Component, Default)]
+pub struct DisappearingSquare {
+    completion: f32,
+}
+
+const DISAPEARING_VELOCITY: f32 = 5.;
+
+pub fn disappearing_square(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    time: Res<Time>,
+    mut sq_query: Query<(Entity, &mut DisappearingSquare, &Children)>,
+    mut query: Query<&mut Handle<ColorMaterial>>,
+    mut spawn_next_piece: EventWriter<SpawnPieceEvent>,
+) {
+    let delta = time.delta().as_secs_f32();
+
+    let mut ended = false;
+
+    for (square_entity, mut disappearing, square_children) in &mut sq_query {
+        disappearing.completion += DISAPEARING_VELOCITY * delta;
+        if disappearing.completion >= 1. {
+            ended = true;
+            commands.entity(square_entity).despawn_recursive();
+        } else {
+            for square_child in square_children {
+                // all children of a square have a color...
+                let cm = query.get_mut(*square_child).unwrap();
+                let color = &mut materials.get_mut(&cm).unwrap().color;
+                let new_alpha = color.a() - DISAPEARING_VELOCITY * delta;
+                if new_alpha >= 0. {
+                    color.set_a(new_alpha);
+                }
+            }
+        }
+    }
+
+    if ended {
+        spawn_next_piece.send_default();
+    }
+}
+
+///Square that must be moved below after new lines as been completed
+#[derive(Component)]
+pub struct ToMoveBelow(pub i32);

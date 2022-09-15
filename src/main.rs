@@ -6,7 +6,9 @@ use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Level, Player};
-use square::{spawn_square, Square, Wall, SQ_TOTAL_SIZE};
+use square::{disappearing_square, spawn_square, Square, Wall, SQ_TOTAL_SIZE};
+
+use crate::square::{DisappearingSquare, ToMoveBelow};
 
 const FIRST_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.25);
 const KEY_REPEAT_DELAY: Duration = Duration::from_secs_f32(0.1);
@@ -57,11 +59,12 @@ fn main() {
                 // detected and the PieceSquare has been removed, the line detection system will
                 // not see the removal of the component until next tick
                 .with_system(detect_complete_lines.before(move_down))
-                .with_system(spawn_new_on_stopped)
+                //.with_system(spawn_new_on_stopped)
                 .with_system(spawn_next_piece)
                 .with_system(move_down_faster)
                 .with_system(rotate)
-                .with_system(stop_fast_move_down_on_collision),
+                .with_system(stop_fast_move_down_on_collision)
+                .with_system(disappearing_square),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
@@ -402,16 +405,14 @@ fn stop_fast_move_down_on_collision(
 fn detect_complete_lines(
     mut commands: Commands,
     mut event_reader: EventReader<PieceHasStoppedEvent>,
+    mut spawn_piece_writer: EventWriter<SpawnPieceEvent>,
     mut fixed_query: Query<
-        (Entity, &Square, &mut BoardPosition, &mut Transform),
+        (Entity, &Square, &BoardPosition),
         (Without<PieceSquare>, Without<Wall>),
     >,
 ) {
     for _ev in event_reader.iter() {
-        let board = fixed_query
-            .iter()
-            .map(|(_, _, bp, _)| *bp)
-            .collect::<Board>();
+        let board = fixed_query.iter().map(|(_, _, bp)| *bp).collect::<Board>();
 
         let full_lines = (1..=BOARD_HEIGHT)
             .into_iter()
@@ -421,17 +422,27 @@ fn detect_complete_lines(
         //println!("BOARD:\n{}", board);
         println!("Full lines: {:?}", full_lines);
 
-        for (entity, _, mut bp, mut tr) in &mut fixed_query {
-            if full_lines.contains(&bp.y) {
-                //remove squares from completed lines!
-                commands.entity(entity).despawn_recursive();
-            } else {
-                // how many lines have been completed below the current
-                // position?
-                let completed_below = full_lines.iter().filter(|line| **line < bp.y).count() as i32;
-                // move down!!!
-                bp.y -= completed_below;
-                tr.translation.y -= completed_below as f32 * SQ_TOTAL_SIZE;
+        if full_lines.is_empty() {
+            spawn_piece_writer.send_default()
+        } else {
+            // new piece will be spawned by the end of the animation
+            for (entity, _, bp) in &mut fixed_query {
+                if full_lines.contains(&bp.y) {
+                    // start animation on squares from completed lines!
+                    // at the end of the animation, the new piece will be spawn
+                    commands
+                        .entity(entity)
+                        .insert(DisappearingSquare::default());
+                } else {
+                    // how many lines have been completed below the current
+                    // position?
+                    let completed_below =
+                        full_lines.iter().filter(|line| **line < bp.y).count() as i32;
+                    // move down!!!
+                    commands.entity(entity).insert(ToMoveBelow(completed_below));
+                    //bp.y -= completed_below;
+                    //tr.translation.y -= completed_below as f32 * SQ_TOTAL_SIZE;
+                }
             }
         }
     }
