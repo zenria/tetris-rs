@@ -6,7 +6,9 @@ use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Level, Player};
-use square::{disappearing_square, spawn_square, Square, Wall, SQ_TOTAL_SIZE};
+use square::{
+    disappearing_square, spawn_square, to_move_below, MoveBelowEvent, Square, Wall, SQ_TOTAL_SIZE,
+};
 
 use crate::square::{DisappearingSquare, ToMoveBelow};
 
@@ -46,6 +48,7 @@ fn main() {
         .add_startup_system(setup)
         .add_event::<PieceHasStoppedEvent>()
         .add_event::<SpawnPieceEvent>()
+        .add_event::<MoveBelowEvent>()
         .add_system(bevy::window::close_on_esc)
         .add_system(pause::pause)
         .add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(game_over::game_over))
@@ -64,7 +67,8 @@ fn main() {
                 .with_system(move_down_faster)
                 .with_system(rotate)
                 .with_system(stop_fast_move_down_on_collision)
-                .with_system(disappearing_square),
+                .with_system(disappearing_square)
+                .with_system(to_move_below),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
@@ -249,15 +253,6 @@ fn move_down(
 /// When a piece has stopped by hitting something concrete
 #[derive(Default)]
 struct PieceHasStoppedEvent;
-
-fn spawn_new_on_stopped(
-    mut event_reader: EventReader<PieceHasStoppedEvent>,
-    mut spawn_piece_writer: EventWriter<SpawnPieceEvent>,
-) {
-    for _ev in event_reader.iter() {
-        spawn_piece_writer.send_default();
-    }
-}
 
 fn rotate(
     input_query: Query<&ActionState<Action>, With<Player>>,

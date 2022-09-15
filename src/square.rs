@@ -1,11 +1,11 @@
 use bevy::{
     prelude::{shape::Quad, *},
-    sprite::{Material2d, MaterialMesh2dBundle},
+    sprite::MaterialMesh2dBundle,
 };
 
 use crate::{
     board::{BoardPosition, BOARD_HEIGHT, BOARD_WIDTH},
-    GameState, SpawnPieceEvent,
+    SpawnPieceEvent,
 };
 
 /// Each item on the board is a Square: pieces are composed
@@ -192,6 +192,7 @@ pub fn disappearing_square(
     mut sq_query: Query<(Entity, &mut DisappearingSquare, &Children)>,
     mut query: Query<&mut Handle<ColorMaterial>>,
     mut spawn_next_piece: EventWriter<SpawnPieceEvent>,
+    mut move_below: EventWriter<MoveBelowEvent>,
 ) {
     let delta = time.delta().as_secs_f32();
 
@@ -216,6 +217,7 @@ pub fn disappearing_square(
     }
 
     if ended {
+        move_below.send_default();
         spawn_next_piece.send_default();
     }
 }
@@ -223,3 +225,21 @@ pub fn disappearing_square(
 ///Square that must be moved below after new lines as been completed
 #[derive(Component)]
 pub struct ToMoveBelow(pub i32);
+
+#[derive(Default)]
+pub struct MoveBelowEvent;
+
+pub fn to_move_below(
+    mut commands: Commands,
+    mut move_below: EventReader<MoveBelowEvent>,
+    mut query: Query<(Entity, &ToMoveBelow, &mut BoardPosition, &mut Transform)>,
+) {
+    for _ in move_below.iter() {
+        // move down
+        for (e, num_of_lines, mut bp, mut tr) in &mut query {
+            bp.y -= num_of_lines.0;
+            tr.translation.y -= num_of_lines.0 as f32 * SQ_TOTAL_SIZE;
+            commands.entity(e).remove::<ToMoveBelow>();
+        }
+    }
+}
