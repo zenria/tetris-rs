@@ -195,8 +195,6 @@ fn spawn_next_random_piece(
             Some(NextPieceSquare(piece.piece_type)),
         );
     }
-    // spawn the actual piece
-    //commands.spawn().insert(piece);
 }
 
 pub fn spawn_next_piece(

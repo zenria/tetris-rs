@@ -9,6 +9,7 @@ edition = "2021"
 bevy = { version = "0.8", features = ["dynamic"] }
 leafwing-input-manager = "0.5"
 rand = "0.8"
+iyes_loopless = "0.7.1"
 
 # Enable only a small amount of optimization in debug mode
 [profile.dev]

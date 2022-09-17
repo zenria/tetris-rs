@@ -5,7 +5,8 @@ use bevy::{prelude::*, window::PresentMode};
 use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
-use player::{spawn_player, Action, Level, Player};
+use player::{spawn_player, Action, Player};
+use score::{increase_score_and_level, Level, LinesCompletedEvent, Score};
 use square::{
     disappearing_square, spawn_square, to_move_below, MoveBelowEvent, Square, Wall, SQ_TOTAL_SIZE,
 };
@@ -49,6 +50,7 @@ fn main() {
         .add_event::<PieceHasStoppedEvent>()
         .add_event::<SpawnPieceEvent>()
         .add_event::<MoveBelowEvent>()
+        .add_event::<LinesCompletedEvent>()
         .add_system(bevy::window::close_on_esc)
         .add_system(pause::pause)
         .add_system_set(SystemSet::on_enter(GameState::GameOver).with_system(game_over::game_over))
@@ -68,7 +70,8 @@ fn main() {
                 .with_system(rotate)
                 .with_system(stop_fast_move_down_on_collision)
                 .with_system(disappearing_square)
-                .with_system(to_move_below),
+                .with_system(to_move_below)
+                .with_system(increase_score_and_level),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
@@ -79,6 +82,7 @@ fn main() {
             timer: Timer::new(FIRST_REPEAT_DELAY, true),
         })
         .insert_resource(level)
+        .insert_resource(Score::default())
         .run();
 }
 
@@ -87,6 +91,7 @@ mod game_over;
 mod pause;
 mod piece;
 mod player;
+mod score;
 mod square;
 
 fn setup(
@@ -181,9 +186,20 @@ fn setup(
 }
 
 /// The timer used to mode down pieces
-struct MoveDownTimer {
-    timer: Timer,
+pub struct MoveDownTimer {
+    pub timer: Timer,
 }
+
+impl MoveDownTimer {
+    pub fn speed_up(&mut self) {
+        self.timer.set_duration(FAST_DOWN_DELAY)
+    }
+
+    pub fn normal_speed(&mut self, level: &Level) {
+        self.timer.set_duration(level.get_down_duration())
+    }
+}
+
 /// The timer to move right/left piece while the left or
 /// right key is pressed
 struct MoveHorizontallyTimer {
@@ -195,7 +211,7 @@ fn move_down(
     time: Res<Time>,
     mut timer: ResMut<MoveDownTimer>,
     mut piece_has_stopped_event_writer: EventWriter<PieceHasStoppedEvent>,
-    fixed_query: Query<(&Square, &mut BoardPosition), Without<PieceSquare>>,
+    fixed_query: Query<(&Square, &BoardPosition), Without<PieceSquare>>,
     mut moving_query: Query<
         (Entity, &Square, &mut BoardPosition, &mut Transform),
         With<PieceSquare>,
@@ -302,7 +318,7 @@ fn rotate(
 
 fn move_horizontally(
     query: Query<&ActionState<Action>, With<Player>>,
-    fixed_query: Query<(&Square, &mut BoardPosition), Without<PieceSquare>>,
+    fixed_query: Query<(&Square, &BoardPosition), Without<PieceSquare>>,
     mut moving_query: Query<
         (Entity, &Square, &mut BoardPosition, &mut Transform),
         With<PieceSquare>,
@@ -380,10 +396,10 @@ fn move_down_faster(
     let action_state = query.single();
 
     if action_state.just_pressed(Action::Down) {
-        timer.timer.set_duration(FAST_DOWN_DELAY)
+        timer.speed_up();
     }
     if action_state.just_released(Action::Down) {
-        timer.timer.set_duration(level.get_down_duration())
+        timer.normal_speed(&level);
     }
 }
 
@@ -405,6 +421,7 @@ fn detect_complete_lines(
         (Entity, &Square, &BoardPosition),
         (Without<PieceSquare>, Without<Wall>),
     >,
+    mut line_completed: EventWriter<LinesCompletedEvent>,
 ) {
     for _ev in event_reader.iter() {
         let board = fixed_query.iter().map(|(_, _, bp)| *bp).collect::<Board>();
@@ -420,6 +437,7 @@ fn detect_complete_lines(
         if full_lines.is_empty() {
             spawn_piece_writer.send_default()
         } else {
+            line_completed.send(LinesCompletedEvent(full_lines.len()));
             // new piece will be spawned by the end of the animation
             for (entity, _, bp) in &mut fixed_query {
                 if full_lines.contains(&bp.y) {
