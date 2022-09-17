@@ -6,7 +6,7 @@ use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Player};
-use score::{increase_score_and_level, Level, LinesCompletedEvent, Score};
+use score::{increase_score_and_level, score_changed, setup_score, Level, LinesCompletedEvent};
 use square::{
     disappearing_square, spawn_square, to_move_below, MoveBelowEvent, Square, Wall, SQ_TOTAL_SIZE,
 };
@@ -46,7 +46,7 @@ fn main() {
         // We need to provide it with an enum which stores the possible actions a player could take
         .add_plugin(InputManagerPlugin::<Action>::default())
         .add_state(GameState::InGame)
-        .add_startup_system(setup)
+        .add_startup_system(setup.chain(setup_score))
         .add_event::<PieceHasStoppedEvent>()
         .add_event::<SpawnPieceEvent>()
         .add_event::<MoveBelowEvent>()
@@ -71,7 +71,8 @@ fn main() {
                 .with_system(stop_fast_move_down_on_collision)
                 .with_system(disappearing_square)
                 .with_system(to_move_below)
-                .with_system(increase_score_and_level),
+                .with_system(increase_score_and_level)
+                .with_system(score_changed),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
@@ -82,7 +83,6 @@ fn main() {
             timer: Timer::new(FIRST_REPEAT_DELAY, true),
         })
         .insert_resource(level)
-        .insert_resource(Score::default())
         .run();
 }
 
