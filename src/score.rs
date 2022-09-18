@@ -84,7 +84,10 @@ pub fn setup_score(mut commands: Commands, asset_server: Res<AssetServer>) {
         .insert(initial_score);
 }
 
-pub fn score_changed(mut query: Query<(&Score, &mut Text), Changed<Score>>) {
+pub fn dispayable_changed<T>(mut query: Query<(&T, &mut Text), Changed<T>>)
+where
+    T: Component + Display + 'static,
+{
     query.for_each_mut(|(score, mut text)| text.sections[0].value = score.to_string());
 }
 

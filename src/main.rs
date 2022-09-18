@@ -6,7 +6,9 @@ use board::{Board, BoardPosition, BOARD_HEIGHT, BOARD_WIDTH};
 use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Player};
-use score::{increase_score_and_level, score_changed, setup_score, Level, LinesCompletedEvent};
+use score::{
+    dispayable_changed, increase_score_and_level, setup_score, Level, LinesCompletedEvent, Score,
+};
 use square::{
     disappearing_square, spawn_square, to_move_below, MoveBelowEvent, Square, Wall, SQ_TOTAL_SIZE,
 };
@@ -72,7 +74,7 @@ fn main() {
                 .with_system(disappearing_square)
                 .with_system(to_move_below)
                 .with_system(increase_score_and_level)
-                .with_system(score_changed),
+                .with_system(dispayable_changed::<Score>),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
