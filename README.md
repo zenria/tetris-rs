@@ -1,3 +1,3 @@
 # tetris-rs
 
-A small tetris game made with Bevy
+A small tetris inspired game made with Bevy for educational purpose.
