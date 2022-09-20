@@ -7,7 +7,8 @@ use leafwing_input_manager::prelude::{ActionState, InputManagerPlugin};
 use piece::{spawn_next_piece, Piece, PieceSquare, Rotation};
 use player::{spawn_player, Action, Player};
 use score::{
-    dispayable_changed, increase_score_and_level, setup_score, Level, LinesCompletedEvent, Score,
+    dispayable_changed, increase_score_and_level, setup_score, Level, LineCompleted,
+    LinesCompletedEvent, Score,
 };
 use square::{
     disappearing_square, spawn_square, to_move_below, MoveBelowEvent, Square, Wall, SQ_TOTAL_SIZE,
@@ -33,8 +34,6 @@ const WINDOW_WIDTH: f32 = (BOARD_WIDTH + 12) as f32 * SQ_TOTAL_SIZE;
 const WINDOW_HEIGHT: f32 = (BOARD_HEIGHT + 2) as f32 * SQ_TOTAL_SIZE;
 
 fn main() {
-    let level = Level::default();
-
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Oxidized Tetris".to_string(),
@@ -74,17 +73,18 @@ fn main() {
                 .with_system(disappearing_square)
                 .with_system(to_move_below)
                 .with_system(increase_score_and_level)
-                .with_system(dispayable_changed::<Score>),
+                .with_system(dispayable_changed::<Score>)
+                .with_system(dispayable_changed::<Level>)
+                .with_system(dispayable_changed::<LineCompleted>),
         )
         .add_system_set(SystemSet::on_enter(GameState::Pause).with_system(pause::enter_pause))
         .add_system_set(SystemSet::on_exit(GameState::Pause).with_system(pause::exit_pause))
         .insert_resource(MoveDownTimer {
-            timer: Timer::from_seconds(level.get_down_duration().as_secs_f32(), true),
+            timer: Timer::from_seconds(Level::default().get_down_duration().as_secs_f32(), true),
         })
         .insert_resource(MoveHorizontallyTimer {
             timer: Timer::new(FIRST_REPEAT_DELAY, true),
         })
-        .insert_resource(level)
         .run();
 }
 
@@ -391,7 +391,7 @@ fn move_horizontally(
 }
 
 fn move_down_faster(
-    level: Res<Level>,
+    level: Query<&Level>,
     mut timer: ResMut<MoveDownTimer>,
     query: Query<&ActionState<Action>, With<Player>>,
 ) {
@@ -401,17 +401,17 @@ fn move_down_faster(
         timer.speed_up();
     }
     if action_state.just_released(Action::Down) {
-        timer.normal_speed(&level);
+        timer.normal_speed(&level.single());
     }
 }
 
 fn stop_fast_move_down_on_collision(
-    level: Res<Level>,
+    level: Query<&Level>,
     mut timer: ResMut<MoveDownTimer>,
     mut event_reader: EventReader<PieceHasStoppedEvent>,
 ) {
     for _ev in event_reader.iter() {
-        timer.timer.set_duration(level.get_down_duration())
+        timer.normal_speed(&level.single())
     }
 }
 
